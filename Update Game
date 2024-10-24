@@ -1,0 +1,245 @@
+import pygame as pg
+import random as ran
+
+# Inisialisasi pygame
+pg.init()
+pg.mixer.init()
+
+# Jendela game
+WIDTH, HEIGHT = 800, 500
+screen = pg.display.set_mode((WIDTH, HEIGHT))
+pg.display.set_caption('Dodge The Enemies')
+
+# Tambahkan image sebagai background
+image = pg.image.load(r'C:\PY\space.jpg')
+image = pg.transform.scale(image, (WIDTH, HEIGHT))
+
+# Warna
+WHITE = (255, 255, 255)
+RED = (255, 0, 0)
+BLUE = (0, 0, 255)
+
+# Kecepatan game
+FPS = 60
+clock = pg.time.Clock()
+
+# Menyimpan highest score dalam variabel
+highest_score = 0
+
+# Memasukkan suara backsound game
+pg.mixer.music.load(r"C:\PY\Backsound.mp3")
+pg.mixer.music.set_volume(0.5)
+pg.mixer.music.play(-1)
+
+# Memasukkan sound efek ship hit rock
+hit_sound = pg.mixer.Sound(r"C:\PY\mati.wav")
+hit_sound.set_volume(0.5)
+
+# Kelas untuk player
+class Player(pg.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pg.image.load(r'C:\PY\pesawat.png')
+        self.image = pg.transform.scale(self.image, (50, 50))
+        self.image.set_colorkey(WHITE)
+        self.rect = self.image.get_rect()
+        self.rect.center = (WIDTH // 2, HEIGHT - 50)
+        self.speed = 5
+        self.shoot_delay = 200
+        self.last_shot = pg.time.get_ticks()
+
+    def update(self):
+        keys = pg.key.get_pressed()
+        if keys[pg.K_LEFT] and self.rect.left > 0:
+            self.rect.x -= self.speed
+        if keys[pg.K_RIGHT] and self.rect.right < WIDTH:
+            self.rect.x += self.speed
+        if keys[pg.K_UP] and self.rect.top > 0:
+            self.rect.y -= self.speed
+        if keys[pg.K_DOWN] and self.rect.bottom < HEIGHT:
+            self.rect.y += self.speed
+
+        # Menembakkan peluru secara otomatis
+        self.auto_shoot()
+
+    def auto_shoot(self):
+        now = pg.time.get_ticks()
+        if now - self.last_shot > self.shoot_delay:  
+            self.last_shot = now
+            bullet = Bullet(self.rect.centerx, self.rect.top)  # Membuat peluru
+            all_sprites.add(bullet)
+            bullets.add(bullet)
+
+# Kelas untuk enemies
+class Enemies(pg.sprite.Sprite):
+    def __init__(self, health):
+        super().__init__()
+        self.image = pg.image.load(r'C:\PY\meteor.jpg')
+        self.image = pg.transform.scale(self.image, (50, 50))
+        self.image.set_colorkey(WHITE)
+        self.rect = self.image.get_rect()
+        self.rect.x = ran.randint(0, WIDTH - 50)
+        self.rect.y = ran.randint(-100, -50)
+        self.speed = ran.randint(2, 6) 
+        self.health = health  # Set nyawa untuk setiap musuh
+
+    def update(self):
+        self.rect.y += self.speed
+        if self.rect.top > HEIGHT:
+            self.rect.x = ran.randint(0, WIDTH - 75)
+            self.rect.y = ran.randint(-100, -50)
+            self.speed = ran.randint(2, 6) 
+            
+    def hit(self):
+        # Mengurangi nyawa musuh saat terkena peluru
+        self.health -= 1
+        if self.health <= 0:
+            self.kill()
+
+# Kelas untuk peluru
+class Bullet(pg.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pg.Surface((10, 10), pg.SRCALPHA) 
+        self.rect = self.image.get_rect()
+        self.rect.centerx = x
+        self.rect.bottom = y
+        self.speed = -5
+        
+        # Gambar lingkaran peluru
+        pg.draw.circle(self.image, RED, (5, 5), 5)  # Gambar lingkaran
+
+    def update(self):
+        self.rect.y += self.speed
+        if self.rect.bottom < 0:  # Hapus peluru jika keluar dari layar
+            self.kill()
+
+
+# Membuat fungsi menampilkan text
+def draw_text(text, font, color, x, y):
+    screen_text = font.render(text, True, color)
+    screen.blit(screen_text, (x, y))
+
+# Membuat fungsi untuk tombol menu
+def draw_button(text, x, y, w, h, inactive_color, active_color, action=None):
+    mouse = pg.mouse.get_pos()
+    click = pg.mouse.get_pressed()
+
+    if x + w > mouse[0] > x and y + h > mouse[1] > y:
+        pg.draw.rect(screen, active_color, (x, y, w, h))
+        if click[0] == 1 and action is not None:
+            action()
+    else:
+        pg.draw.rect(screen, inactive_color, (x, y, w, h))
+
+    font = pg.font.SysFont(None, 40)
+    text_surf = font.render(text, True, WHITE)
+    screen.blit(text_surf, (x + (w - text_surf.get_width()) // 2, y + (h - text_surf.get_height()) // 2))
+
+# Membuat fungsi untuk memulai game
+def start_game():
+    global highest_score, all_sprites, enemies, bullets  
+
+    # Inisialisasi sprite group
+    all_sprites = pg.sprite.Group()
+    enemies = pg.sprite.Group()
+    bullets = pg.sprite.Group()
+
+    # Membuat player
+    player = Player()
+    all_sprites.add(player)
+
+    # Membuat enemies
+    for _ in range(3):  # Ada 3 musuh di awal
+        enemy = Enemies(2)  # Set nyawa musuh awal ke 2
+        all_sprites.add(enemy)
+        enemies.add(enemy)
+
+    score = 0
+    start = pg.time.get_ticks()
+    level = 1
+
+    # Loop game
+    run = True
+    game_over = False
+    while run:
+        clock.tick(FPS)
+
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                run = False
+
+        if score > 10 * level:
+            level += 1
+            # Meningkatkan jumlah musuh yang ditambahkan setiap level
+            num_new_enemies = 3 + level  # Tambah jumlah musuh baru berdasarkan level
+            for _ in range(num_new_enemies):
+                enemy = Enemies(2 + (level // 2))  # Tambah nyawa setiap 2 level
+                enemy.speed = ran.randint(2 + level, 6 + level)  # Meningkatkan kecepatan musuh
+                all_sprites.add(enemy)
+                enemies.add(enemy)
+
+        if not game_over:
+            all_sprites.update()
+
+            # Deteksi tabrakan antara player dan enemies
+            hits = pg.sprite.spritecollide(player, enemies, False)
+            if hits:
+                hit_sound.play()
+                game_over = True
+                game_over_time = (pg.time.get_ticks() - start) // 1000
+                
+                if game_over_time > highest_score:
+                    highest_score = game_over_time
+
+            # Deteksi tabrakan antara peluru dan musuh
+            hits = pg.sprite.groupcollide(bullets, enemies, False, False)
+            for bullet in hits:
+                for enemy in hits[bullet]:  # Untuk setiap musuh yang terkena peluru
+                    enemy.hit()  # Mengurangi health musuh saat terkena peluru
+                    score += 1  # Menambah skor setiap kali musuh tertembak
+                bullet.kill()  # Hapus peluru setelah mengenai musuh
+
+            # Perbarui skor
+            score = (pg.time.get_ticks() - start) // 1000
+
+        screen.blit(image, (0, 0))
+        all_sprites.draw(screen)
+
+        font = pg.font.SysFont(None, 30)
+        text = font.render(f"Score: {score}", True, WHITE)
+        screen.blit(text, (10, 10))
+        
+        text = font.render(f"Level: {level}", True, WHITE)
+        screen.blit(text, (10, 30))
+
+        if game_over:
+            over_text = font.render(f"Game Over! Final Score: {game_over_time}", True, WHITE)
+            screen.blit(over_text, (WIDTH // 2 - 150, HEIGHT // 2))
+            draw_button("Restart Game", WIDTH // 3, HEIGHT // 2 + 50, 250, 50, BLUE, RED, start_game)
+
+        pg.display.flip()
+
+    pg.quit()
+
+# Membuat fungsi menu utama
+def main_menu():
+    menu = True
+    while menu:
+        screen.blit(image, (0, 0))
+
+        font = pg.font.SysFont(None, 70)
+        draw_text("Dodge The Enemies", font, WHITE, WIDTH // 4, HEIGHT // 4)
+
+        draw_button("Start Game", WIDTH // 3, HEIGHT // 2, 250, 50, BLUE, RED, start_game)
+
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                menu = False
+
+        pg.display.update()
+        clock.tick(15)
+
+# Mulai program
+if __name__ == '__main__':
+    main_menu()
